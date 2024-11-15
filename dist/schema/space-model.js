@@ -12,6 +12,11 @@ const SpaceModel = new mongoose_1.default.Schema({
         type: [{ type: mongoose_1.default.Types.ObjectId, ref: "Stream" }], //each audio
         default: [],
     },
+    currentVideo: {
+        type: mongoose_1.default.Schema.Types.Mixed, // Allows flexibility for any type, including ObjectId or null
+        ref: "Stream",
+        default: null,
+    },
 });
 const Spaces = ((_a = mongoose_1.default.models) === null || _a === void 0 ? void 0 : _a.Space) || mongoose_1.default.model("Space", SpaceModel);
 exports.default = Spaces;

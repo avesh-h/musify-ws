@@ -46,17 +46,55 @@ io.on("connection", (socket) => {
     const createdStream = new Streams(payload);
     await createdStream.save();
 
-    // Add new stream in streams of space
-    await Spaces.findByIdAndUpdate(
-      spaceId,
-      { $push: { streams: createdStream?._id } },
-      { new: true }
-    );
+    // Check if the streams array already has items
+    const space = await Spaces.findById(spaceId);
+
+    //TODO: throw error if space not found!
+
+    // Prepare the update object
+    const updateFields: any = {
+      $push: { streams: createdStream?._id },
+    };
+
+    // If the streams array was empty, set currentVideo to the new stream ID
+    if (space.streams.length === 0) {
+      updateFields.currentVideo = createdStream._id;
+    }
+
+    // Add the new stream to the streams array and conditionally set currentVideo
+    await Spaces.findByIdAndUpdate(spaceId, updateFields, { new: true });
 
     if (createdStream) {
       // emit event in the room of the space id for added song.
       io.in(spaceId).emit("added_stream", createdStream);
     }
+  });
+
+  //Upvotes handler
+  socket.on("upvote_stream", async (payload) => {
+    const { spaceId, streamId, userId } = payload;
+    const stream = await Streams.findOne({
+      _id: streamId,
+      spaceId,
+    });
+    if (!stream) {
+      console.error("Stream not found for the given spaceId and streamId");
+      return;
+    }
+    // Find user that it already voted the song
+    const isAlreadyVoted = stream.upvotes.includes(userId);
+
+    const updateQuery = isAlreadyVoted
+      ? { $pull: { upvotes: userId } } // Remove vote
+      : { $push: { upvotes: userId } }; // Add vote without duplicates
+
+    const updatedStream = await Streams.findOneAndUpdate(
+      { _id: streamId, spaceId },
+      updateQuery,
+      { new: true }
+    );
+    // Get all streams from space and manipulate the index of it based on no. of upvotes on each stream
+    // send updated space streams by emit here
   });
 });
 

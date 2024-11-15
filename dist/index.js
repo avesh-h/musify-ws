@@ -51,12 +51,43 @@ io.on("connection", (socket) => {
         // TODO: call youtube search api get the thumnails and images from it and update the stream object.
         const createdStream = new steam_model_1.default(payload);
         yield createdStream.save();
-        // Add new stream in streams of space
-        yield space_model_1.default.findByIdAndUpdate(spaceId, { $push: { streams: createdStream === null || createdStream === void 0 ? void 0 : createdStream._id } }, { new: true });
+        // Check if the streams array already has items
+        const space = yield space_model_1.default.findById(spaceId);
+        //TODO: throw error if space not found!
+        // Prepare the update object
+        const updateFields = {
+            $push: { streams: createdStream === null || createdStream === void 0 ? void 0 : createdStream._id },
+        };
+        // If the streams array was empty, set currentVideo to the new stream ID
+        if (space.streams.length === 0) {
+            updateFields.currentVideo = createdStream._id;
+        }
+        // Add the new stream to the streams array and conditionally set currentVideo
+        yield space_model_1.default.findByIdAndUpdate(spaceId, updateFields, { new: true });
         if (createdStream) {
             // emit event in the room of the space id for added song.
             io.in(spaceId).emit("added_stream", createdStream);
         }
+    }));
+    //Upvotes handler
+    socket.on("upvote_stream", (payload) => __awaiter(void 0, void 0, void 0, function* () {
+        const { spaceId, streamId, userId } = payload;
+        const stream = yield steam_model_1.default.findOne({
+            _id: streamId,
+            spaceId,
+        });
+        if (!stream) {
+            console.error("Stream not found for the given spaceId and streamId");
+            return;
+        }
+        // Find user that it already voted the song
+        const isAlreadyVoted = stream.upvotes.includes(userId);
+        const updateQuery = isAlreadyVoted
+            ? { $pull: { upvotes: userId } } // Remove vote
+            : { $push: { upvotes: userId } }; // Add vote without duplicates
+        const updatedStream = yield steam_model_1.default.findOneAndUpdate({ _id: streamId, spaceId }, updateQuery, { new: true });
+        // Get all streams from space and manipulate the index of it based on no. of upvotes on each stream
+        // send updated space streams by emit here
     }));
 });
 const getVideoDetails = (videoId) => __awaiter(void 0, void 0, void 0, function* () {
