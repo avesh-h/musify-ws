@@ -71,23 +71,51 @@ io.on("connection", (socket) => {
     }));
     //Upvotes handler
     socket.on("upvote_stream", (payload) => __awaiter(void 0, void 0, void 0, function* () {
+        var _a, _b;
         const { spaceId, streamId, userId } = payload;
-        const stream = yield steam_model_1.default.findOne({
-            _id: streamId,
-            spaceId,
-        });
-        if (!stream) {
-            console.error("Stream not found for the given spaceId and streamId");
-            return;
+        try {
+            const stream = yield steam_model_1.default.findOne({
+                _id: streamId,
+                spaceId,
+            });
+            if (!stream) {
+                console.error("Stream not found for the given spaceId and streamId");
+                return;
+            }
+            // Find user that it already voted the song
+            const isAlreadyVoted = stream.upvotes.includes(userId);
+            const updateQuery = isAlreadyVoted
+                ? { $pull: { upvotes: userId } } // Remove vote
+                : { $push: { upvotes: userId } }; // Add vote without duplicates
+            const updatedStream = yield steam_model_1.default.findOneAndUpdate({ _id: streamId, spaceId }, updateQuery, { new: true });
+            // Get all streams from space and manipulate the index of it based on no. of upvotes on each stream
+            const space = yield space_model_1.default.findOne({ _id: spaceId }).populate("streams");
+            let allStreams = (_a = space.streams) === null || _a === void 0 ? void 0 : _a.filter((s) => String(s._id) !== String(space === null || space === void 0 ? void 0 : space.currentVideo) //for ignore current video from queue
+            );
+            if (space && ((_b = space === null || space === void 0 ? void 0 : space.streams) === null || _b === void 0 ? void 0 : _b.length)) {
+                //NOTE : if stream upvotes length is 0 then sorted via createdDate else sorted with number of votes
+                if (allStreams.some((stream) => { var _a; return (_a = stream.upvotes) === null || _a === void 0 ? void 0 : _a.length; })) {
+                    // Sort based on the number of upvotes in descending order
+                    allStreams.sort((streamA, streamB) => { var _a, _b; return (((_a = streamB.upvotes) === null || _a === void 0 ? void 0 : _a.length) || 0) - (((_b = streamA.upvotes) === null || _b === void 0 ? void 0 : _b.length) || 0); });
+                }
+                else {
+                    // Sort by `createdAt` field if no streams have upvotes
+                    allStreams.sort((streamA, streamB) => new Date(streamA.createdAt).getTime() -
+                        new Date(streamB.createdAt).getTime());
+                }
+                //Update the space's stream order
+                space.streams = allStreams.map((s) => s._id);
+                //added again current video at first position.
+                space.streams.unshift(space === null || space === void 0 ? void 0 : space.currentVideo);
+                yield space.save();
+                const updatedSpace = yield space.populate("streams");
+                // send updated space streams by emit here
+                socket.emit("upvoted_streams", updatedSpace === null || updatedSpace === void 0 ? void 0 : updatedSpace.streams);
+            }
         }
-        // Find user that it already voted the song
-        const isAlreadyVoted = stream.upvotes.includes(userId);
-        const updateQuery = isAlreadyVoted
-            ? { $pull: { upvotes: userId } } // Remove vote
-            : { $push: { upvotes: userId } }; // Add vote without duplicates
-        const updatedStream = yield steam_model_1.default.findOneAndUpdate({ _id: streamId, spaceId }, updateQuery, { new: true });
-        // Get all streams from space and manipulate the index of it based on no. of upvotes on each stream
-        // send updated space streams by emit here
+        catch (error) {
+            console.log("errrrrrrrrr", error);
+        }
     }));
 });
 const getVideoDetails = (videoId) => __awaiter(void 0, void 0, void 0, function* () {

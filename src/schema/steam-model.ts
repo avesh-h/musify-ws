@@ -1,18 +1,21 @@
 import mongoose from "mongoose";
 import Spaces from "./space-model";
 
-const StreamModel = new mongoose.Schema({
-  url: String,
-  upvotes: {
-    type: [{ type: mongoose.Types.ObjectId, ref: "Users" }],
-    default: [],
+const StreamModel = new mongoose.Schema(
+  {
+    url: String,
+    upvotes: {
+      type: [{ type: mongoose.Types.ObjectId, ref: "Users" }],
+      default: [],
+    },
+    videoId: String,
+    image: String,
+    title: String,
+    thumbnails: [{ url: String, width: Number, height: Number }],
+    spaceId: { type: mongoose.Types.ObjectId, ref: "Space" },
   },
-  videoId: String,
-  image: String,
-  title: String,
-  thumbnails: [{ url: String, width: Number, height: Number }],
-  spaceId: { type: mongoose.Types.ObjectId, ref: "Space" },
-});
+  { timestamps: true }
+);
 
 // If the stream is first for the space then save stream id as a current video
 // StreamModel.post("save", async (savedStream) => {

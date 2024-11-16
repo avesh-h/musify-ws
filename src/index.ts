@@ -73,28 +73,68 @@ io.on("connection", (socket) => {
   //Upvotes handler
   socket.on("upvote_stream", async (payload) => {
     const { spaceId, streamId, userId } = payload;
-    const stream = await Streams.findOne({
-      _id: streamId,
-      spaceId,
-    });
-    if (!stream) {
-      console.error("Stream not found for the given spaceId and streamId");
-      return;
+    try {
+      const stream = await Streams.findOne({
+        _id: streamId,
+        spaceId,
+      });
+      if (!stream) {
+        console.error("Stream not found for the given spaceId and streamId");
+        return;
+      }
+      // Find user that it already voted the song
+      const isAlreadyVoted = stream.upvotes.includes(userId);
+
+      const updateQuery = isAlreadyVoted
+        ? { $pull: { upvotes: userId } } // Remove vote
+        : { $push: { upvotes: userId } }; // Add vote without duplicates
+
+      const updatedStream = await Streams.findOneAndUpdate(
+        { _id: streamId, spaceId },
+        updateQuery,
+        { new: true }
+      );
+      // Get all streams from space and manipulate the index of it based on no. of upvotes on each stream
+      const space = await Spaces.findOne({ _id: spaceId }).populate("streams");
+
+      let allStreams = space.streams?.filter(
+        (s: any) => String(s._id) !== String(space?.currentVideo) //for ignore current video from queue
+      );
+
+      if (space && space?.streams?.length) {
+        //NOTE : if stream upvotes length is 0 then sorted via createdDate else sorted with number of votes
+
+        if (allStreams.some((stream: any) => stream.upvotes?.length)) {
+          // Sort based on the number of upvotes in descending order
+          allStreams.sort(
+            (streamA: any, streamB: any) =>
+              (streamB.upvotes?.length || 0) - (streamA.upvotes?.length || 0)
+          );
+        } else {
+          // Sort by `createdAt` field if no streams have upvotes
+          allStreams.sort(
+            (streamA: any, streamB: any) =>
+              new Date(streamA.createdAt).getTime() -
+              new Date(streamB.createdAt).getTime()
+          );
+        }
+
+        //Update the space's stream order
+        space.streams = allStreams.map((s: any) => s._id);
+
+        //added again current video at first position.
+        space.streams.unshift(space?.currentVideo);
+
+        await space.save();
+
+        const updatedSpace = await space.populate("streams");
+
+        // send updated space streams by emit here
+        socket.emit("upvoted_streams", updatedSpace?.streams);
+      }
+    } catch (error) {
+      console.log("errrrrrrrrr", error);
     }
-    // Find user that it already voted the song
-    const isAlreadyVoted = stream.upvotes.includes(userId);
-
-    const updateQuery = isAlreadyVoted
-      ? { $pull: { upvotes: userId } } // Remove vote
-      : { $push: { upvotes: userId } }; // Add vote without duplicates
-
-    const updatedStream = await Streams.findOneAndUpdate(
-      { _id: streamId, spaceId },
-      updateQuery,
-      { new: true }
-    );
-    // Get all streams from space and manipulate the index of it based on no. of upvotes on each stream
-    // send updated space streams by emit here
   });
 });
 

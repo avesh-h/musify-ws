@@ -16,7 +16,7 @@ const StreamModel = new mongoose_1.default.Schema({
     title: String,
     thumbnails: [{ url: String, width: Number, height: Number }],
     spaceId: { type: mongoose_1.default.Types.ObjectId, ref: "Space" },
-});
+}, { timestamps: true });
 // If the stream is first for the space then save stream id as a current video
 // StreamModel.post("save", async (savedStream) => {
 //   const spaceId = savedStream?.spaceId;
