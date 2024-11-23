@@ -110,13 +110,44 @@ io.on("connection", (socket) => {
                 yield space.save();
                 const updatedSpace = yield space.populate("streams");
                 // send updated space streams by emit here
-                socket.emit("upvoted_streams", updatedSpace === null || updatedSpace === void 0 ? void 0 : updatedSpace.streams);
+                // socket.emit("upvoted_streams", updatedSpace?.streams);
+                io.in(spaceId).emit("upvoted_streams", updatedSpace === null || updatedSpace === void 0 ? void 0 : updatedSpace.streams);
             }
         }
         catch (error) {
             console.log("errrrrrrrrr", error);
         }
     }));
+    //Delete stream handler
+    socket.on("delete_stream", (payload) => __awaiter(void 0, void 0, void 0, function* () {
+        var _a;
+        const { spaceId, videoId } = payload;
+        //Remove song from the space
+        // Remove the song from the space's streams array
+        const updatedSpace = yield space_model_1.default.findByIdAndUpdate(spaceId, { $pull: { streams: videoId } }, { new: true } // Return the updated document
+        );
+        const nextVideoIdx = ((_a = updatedSpace === null || updatedSpace === void 0 ? void 0 : updatedSpace.streams) === null || _a === void 0 ? void 0 : _a.findIndex((vidId) => vidId === (updatedSpace === null || updatedSpace === void 0 ? void 0 : updatedSpace.currentVideo))) + 1;
+        // Determine the next video for currentVideo
+        const currentVideoId = updatedSpace.streams[nextVideoIdx] || null; // Use the next available stream, or null if empty
+        // Update the currentVideo in the space document
+        yield space_model_1.default.findByIdAndUpdate(spaceId, { currentVideo: currentVideoId });
+        //Remove song from the streams collection
+        yield steam_model_1.default.findByIdAndDelete(videoId);
+        const space = yield (updatedSpace === null || updatedSpace === void 0 ? void 0 : updatedSpace.populate("streams"));
+        const response = {
+            nextVideoId: updatedSpace.streams[nextVideoIdx],
+            streams: space === null || space === void 0 ? void 0 : space.streams,
+        };
+        io.in(spaceId).emit("remainning_streams", response);
+    }));
+    //Pause/Play video controller
+    socket.on("video-controller", (event) => {
+        io.in(event.spaceId).emit("video-controller", { action: event.action });
+    });
+    // socket.on("check_room", (data) => {
+    //   const sockets = io.sockets.adapter.rooms.get(data?.spaceId);
+    //   console.log("ssssssssssssss", sockets);
+    // });
 });
 const getVideoDetails = (videoId) => __awaiter(void 0, void 0, void 0, function* () {
     const videoDetails = yield (youtube_search_api_1.default === null || youtube_search_api_1.default === void 0 ? void 0 : youtube_search_api_1.default.GetVideoDetails(videoId));

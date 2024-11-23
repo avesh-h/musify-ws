@@ -130,12 +130,57 @@ io.on("connection", (socket) => {
         const updatedSpace = await space.populate("streams");
 
         // send updated space streams by emit here
-        socket.emit("upvoted_streams", updatedSpace?.streams);
+        // socket.emit("upvoted_streams", updatedSpace?.streams);
+        io.in(spaceId).emit("upvoted_streams", updatedSpace?.streams);
       }
     } catch (error) {
       console.log("errrrrrrrrr", error);
     }
   });
+
+  //Delete stream handler
+  socket.on("delete_stream", async (payload) => {
+    const { spaceId, videoId } = payload;
+
+    //Remove song from the space
+    // Remove the song from the space's streams array
+    const updatedSpace = await Spaces.findByIdAndUpdate(
+      spaceId,
+      { $pull: { streams: videoId } },
+      { new: true } // Return the updated document
+    );
+
+    const nextVideoIdx =
+      updatedSpace?.streams?.findIndex(
+        (vidId: string) => vidId === updatedSpace?.currentVideo
+      ) + 1;
+
+    // Determine the next video for currentVideo
+    const currentVideoId = updatedSpace.streams[nextVideoIdx] || null; // Use the next available stream, or null if empty
+
+    // Update the currentVideo in the space document
+    await Spaces.findByIdAndUpdate(spaceId, { currentVideo: currentVideoId });
+    //Remove song from the streams collection
+    await Streams.findByIdAndDelete(videoId);
+
+    const space = await updatedSpace?.populate("streams");
+    const response = {
+      nextVideoId: updatedSpace.streams[nextVideoIdx],
+      streams: space?.streams,
+    };
+
+    io.in(spaceId).emit("remainning_streams", response);
+  });
+
+  //Pause/Play video controller
+  socket.on("video-controller", (event) => {
+    io.in(event.spaceId).emit("video-controller", { action: event.action });
+  });
+
+  // socket.on("check_room", (data) => {
+  //   const sockets = io.sockets.adapter.rooms.get(data?.spaceId);
+  //   console.log("ssssssssssssss", sockets);
+  // });
 });
 
 const getVideoDetails = async (videoId: string) => {
